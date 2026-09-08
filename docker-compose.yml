@@ -25,6 +25,7 @@ services:
     ports: ["9090:9090"]
     command: [
       "--config.file=/etc/prometheus/prometheus.yml",
+      "--enable-feature=native-histograms",
       "--web.enable-remote-write-receiver",
       "--enable-feature=exemplar-storage",
       "--web.enable-lifecycle",
