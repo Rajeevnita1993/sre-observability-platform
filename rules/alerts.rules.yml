@@ -1,0 +1,29 @@
+groups:
+  - name: service_alerts
+    rules:
+      - alert: HighErrorRatio
+        expr: job:http_error_ratio:ratio5m{job="api"} > 0.05
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "High 5xx ratio on {{ $labels.job }}"
+          description: "Error ratio {{ $value | humanizePercentage }} for 5m."
+
+      - alert: SqsBacklogGrowing
+        expr: sqs_queue_depth{queue="orders-queue"} > 100
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "SQS backlog on {{ $labels.queue }}"
+          description: "Depth is {{ $value }} msgs (>100) for 5m — worker behind."
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(s3_write_duration_bucket{job="worker"}[5m]))) > 2
+        for: 5m
+        labels:
+          severity: warning
+          queue: orders-queue
+        annotations:
+          summary: "p95 write latency high on {{ $labels.queue }}"
+          description: "p95 is {{ $value }}s (>2s) for 5m — worker may be struggling."

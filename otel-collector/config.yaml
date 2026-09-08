@@ -1,0 +1,42 @@
+receivers:
+  otlp:
+    protocols:
+      grpc: { endpoint: 0.0.0.0:4317 }
+      http: { endpoint: 0.0.0.0:4318 }
+
+processors:
+  batch: {}
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls: { insecure: true }
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+  otlphttp/mimir:
+    endpoint: http://mimir:9009/otlp
+  prometheus:
+    endpoint: 0.0.0.0:9464
+  
+  # ✅ Use OTLP HTTP exporter for profiles
+  otlphttp/pyroscope:
+    endpoint: http://pyroscope:4318   # OTLP HTTP endpoint
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/tempo]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/loki]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/mimir, prometheus]
+    # profiles:
+    #   receivers: [otlp]
+    #   processors: [batch]
+    #   exporters: [otlphttp/pyroscope]   # ✅ matches the exporter name

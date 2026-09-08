@@ -1,0 +1,51 @@
+// Scrape Prometheus-format metrics from the apps and remote-write to Mimir.
+prometheus.scrape "apps" {
+  targets = [
+    { __address__ = "api:9464",    job = "api"    },
+    { __address__ = "worker:9464", job = "worker" },
+  ]
+  forward_to = [prometheus.remote_write.mimir.receiver]
+}
+
+prometheus.remote_write "mimir" {
+  endpoint { url = "http://mimir:9009/api/v1/push" }
+}
+
+// Pull continuous profiles from the apps' pprof endpoints into Pyroscope.
+
+
+
+// Discover running containers on the local Docker host
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// Keep only API and worker containers and assign low-cardinality labels
+discovery.relabel "svc" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/day01-lgtm-stack-(api|worker)-[0-9]+"
+    target_label  = "service"
+    replacement   = "$1"
+  }
+
+  rule {
+    target_label = "env"
+    replacement  = "local"
+}
+}
+// Tail stdout/stderr of API and worker containers
+loki.source.docker "logs" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.svc.output
+  forward_to = [loki.write.default.receiver]
+}
+
+// Push logs to Loki
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

@@ -1,0 +1,181 @@
+name: day01-lgtm-stack
+networks:
+  default:
+    name: day01-lgtm-stack_default
+
+services:
+  grafana:
+    image: grafana/grafana:11.2.0
+    ports: ["3000:3000"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_FEATURE_TOGGLES_ENABLE: "flameGraph traceqlEditor"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    healthcheck:
+      test: ["CMD-SHELL","wget -qO- http://localhost:3000/api/health | grep -q ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10   # (yaml: split to separate keys)
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    ports: ["9090:9090"]
+    command: [
+      "--config.file=/etc/prometheus/prometheus.yml",
+      "--web.enable-remote-write-receiver",
+      "--enable-feature=exemplar-storage",
+      "--web.enable-lifecycle" 
+      ]
+    volumes: [
+      "./prometheus.yml:/etc/prometheus/prometheus.yml",
+      "./rules:/etc/prometheus/rules"
+      ]
+
+  loki:
+    image: grafana/loki:3.1.1
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports: ["3100:3100"]
+
+  tempo:
+    image: grafana/tempo:2.6.0
+    command: ["-config.file=/etc/tempo.yaml"]
+    ports: ["3200:3200","4317","4318"]
+    volumes: ["./tempo.yaml:/etc/tempo.yaml"]
+
+  mimir:
+    image: grafana/mimir:latest
+    command: [
+      "-config.file=/etc/mimir.yaml",
+      "-validation.max-label-names-per-series=50"
+      ]
+    ports: ["9009:9009"]
+    volumes:
+      - "./mimir.yaml:/etc/mimir.yaml"
+      - mimir-data:/data
+
+  pyroscope:
+    image: grafana/pyroscope:2.0.5
+    ports:
+      - "4040:4040"
+    environment:
+      - PYROSCOPE_STORAGE_PATH=/var/lib/pyroscope
+      # Enable OTLP HTTP and gRPC
+      - PYROSCOPE_OTLP_HTTP_LISTEN_ADDRESS=0.0.0.0:4318
+      - PYROSCOPE_OTLP_GRPC_LISTEN_ADDRESS=0.0.0.0:4317
+    volumes:
+      - pyroscope-data:/var/lib/pyroscope
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.108.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports: ["4317:4317","4318:4318"]   # OTLP gRPC / HTTP (host)
+    volumes: ["./otel-collector/config.yaml:/etc/otelcol/config.yaml"]
+    depends_on: [tempo, loki, mimir]
+
+  alloy:
+    image: grafana/alloy:v1.3.1
+    command: ["run","--server.http.listen-addr=0.0.0.0:12345","/etc/alloy/config.alloy"]
+    ports: ["12345:12345"]
+    volumes:
+    - "./alloy/config.alloy:/etc/alloy/config.alloy"
+    - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+  localstack:
+    image: localstack/localstack:3.7
+    ports: ["4566:4566"]
+    environment:
+      SERVICES: "sns,sqs,s3"
+      DEBUG: "0"
+    healthcheck:
+      test: ["CMD-SHELL","awslocal sns list-topics >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      retries: 12
+
+  api:
+    build: ./api
+    volumes:
+      - ./api:/app                 
+      - ./shared:/app/shared          
+      - /app/node_modules
+    ports: ["8080:8080"]
+    restart: unless-stopped
+    command: ["node", "app.js"] 
+    environment:
+      AWS_ENDPOINT: "http://localstack:4566"
+      #AWS_ENDPOINT: "http://localstack:999"
+      AWS_REGION: "us-east-1"
+      AWS_ACCESS_KEY_ID: "test"
+      AWS_SECRET_ACCESS_KEY: "test"
+      TOPIC_ARN: "arn:aws:sns:us-east-1:000000000000:orders"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "grpc" 
+      OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: "http/protobuf"
+      OTEL_SERVICE_NAME: "api"
+      PYROSCOPE_SERVER_ADDRESS: "http://pyroscope:4040"
+    depends_on: [localstack, otel-collector]
+
+  worker:
+    build: ./worker
+    volumes:
+      - ./worker:/app                 
+      - ./shared:/app/shared          
+      - /app/node_modules
+    restart: unless-stopped
+    command: ["node", "worker.js"] 
+    environment:
+      AWS_ENDPOINT: "http://localstack:4566"
+      AWS_REGION: "us-east-1"
+      AWS_ACCESS_KEY_ID: "test"
+      AWS_SECRET_ACCESS_KEY: "test"
+      QUEUE_URL: "http://localstack:4566/000000000000/orders-queue"
+      RESULT_BUCKET: "order-results"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "grpc" 
+      OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: "http/protobuf"
+      OTEL_SERVICE_NAME: "worker"
+      PYROSCOPE_SERVER_ADDRESS: "http://pyroscope:4040"
+    depends_on: [localstack, otel-collector]
+
+  # docker-compose.yml  — add under services:
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node-exporter
+    command:
+      - '--path.rootfs=/host'
+    pid: host
+    restart: unless-stopped
+    # volumes:
+    #   - '/:/host:ro,rslave'
+    ports: ["9100:9100"]
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    privileged: true
+    restart: unless-stopped
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports: ["8081:8080"]
+    networks:
+      - default
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+
+volumes:
+  pyroscope-data: {}
+  mimir-data: {}
