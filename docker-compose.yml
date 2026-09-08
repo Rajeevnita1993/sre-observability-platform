@@ -20,7 +20,8 @@ services:
       retries: 10   # (yaml: split to separate keys)
 
   prometheus:
-    image: prom/prometheus:v2.54.1
+    image: prom/prometheus:latest
+    container_name: prometheus
     ports: ["9090:9090"]
     command: [
       "--config.file=/etc/prometheus/prometheus.yml",
@@ -32,6 +33,32 @@ services:
       "./prometheus.yml:/etc/prometheus/prometheus.yml",
       "./rules:/etc/prometheus/rules"
       ]
+
+  prometheus-regional:
+    image: prom/prometheus:latest
+    container_name: prometheus-regional
+    command:
+      - '--config.file=/etc/prometheus/prometheus-regional.yml'
+      - '--web.listen-address=:9091'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./prometheus-regional.yml:/etc/prometheus/prometheus-regional.yml:ro
+      - ./rules:/etc/prometheus/rules:ro
+    ports:
+      - '9091:9091'
+
+  prometheus-global:
+    image: prom/prometheus:latest
+    container_name: prometheus-global
+    command:
+      - '--config.file=/etc/prometheus/prometheus-global.yml'
+      - '--web.listen-address=:9092'
+    volumes:
+      - ./prometheus-global.yml:/etc/prometheus/prometheus-global.yml:ro
+    ports:
+      - '9092:9092'
+    depends_on:
+      - prometheus-regional
 
   loki:
     image: grafana/loki:3.1.1
