@@ -1,0 +1,3 @@
+[
+  { "targets": ["api:8080"], "labels": { "job": "api" } }
+]

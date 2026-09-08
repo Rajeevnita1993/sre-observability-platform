@@ -27,20 +27,31 @@ scrape_configs:
       - targets: ["localhost:9090"]
 
   - job_name: worker
-    metrics_path: /metrics
-    static_configs:
-      - targets: ["worker:9464"]
+    file_sd_configs:
+      - files: ['/etc/prometheus/targets/worker.json']
+        refresh_interval: 30s
 
   - job_name: 'api'
-    metrics_path: /metrics
-    static_configs:
-      - targets: ['api:8080']
-        labels:
-          service: orders-api
+    file_sd_configs:
+      - files: ['/etc/prometheus/targets/api.json']
+        refresh_interval: 30s
+    relabel_configs:
+      - target_label: environment
+        replacement: dev
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'go_gc_.*|go_memstats_.*'
+        action: drop
 
   - job_name: node-exporter
-    static_configs:
-      - targets: ['node-exporter:9100']
+    file_sd_configs:
+      - files: ['/etc/prometheus/targets/node.json']
+        refresh_interval: 30s
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'go_gc_.*|go_memstats_.*'
+        action: drop
+        
 
   - job_name: cadvisor
     static_configs:

@@ -1,0 +1,3 @@
+[
+  { "targets": ["worker:9464"], "labels": { "job": "worker" } }
+]
