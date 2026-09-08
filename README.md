@@ -109,18 +109,21 @@ The architecture demonstrates how all telemetry signals flow through OpenTelemet
 
 ### Metrics
 
-Metrics are collected from all services through OpenTelemetry instrumentation:
+Metrics are collected from all services through OpenTelemetry instrumentation and Prometheus clients:
 
 - **Application metrics**: HTTP request counts, durations, in-flight requests, and order processing counters
 - **Infrastructure/container metrics**: Node exporter metrics for host-level monitoring and cAdvisor for container performance
 - **OpenTelemetry metrics**: Automatically instrumented APIs and workers with custom metrics
 - **Prometheus scraping**: Configured to scrape services at specific endpoints
 - **Custom metrics**: 
-  - `http_requests_total`: HTTP request counts with route/method/status labels
-  - `orders_published_total`: Total orders published to SQS with success/error status
-  - `worker_jobs_processed`: Jobs processed by worker with success/error status
-  - `sqs_queue_depth`: Current queue depth of SQS messages
-  - `s3_write_duration`: Latency of S3 write operations
+  - `http_requests_total` (Counter): Total HTTP requests with `route`, `method`, and `status` labels
+  - `http_request_duration_seconds` (Histogram): HTTP request latency with `route`, `method`, and `status` labels (buckets from 5ms to 5s)
+  - `http_requests_in_flight` (Gauge): Current number of in-flight HTTP requests by `route`
+  - `orders_published_total` (Counter): Total orders published to SQS with a `status` label (success/error)
+  - `worker_jobs_processed` (Counter): Total jobs consumed from SQS and written to S3 
+  - `sqs_queue_depth` (ObservableGauge): Approximate number of visible messages currently in the SQS queue
+  - `sqs_messages_consumed_total` (Counter): Total SQS messages consumed and processed by the worker
+  - `s3_write_duration` (Histogram): Latency of S3 PutObject operations in seconds
 
 ### Logs
 
@@ -242,7 +245,7 @@ docker-compose ps
 | Pyroscope | http://localhost:4040 | Profiling service |
 | LocalStack | http://localhost:4566 | AWS Local stack |
 | API | http://localhost:8080 | Application API |
-| Alloy | http://localhost:12345 | Alloy metrics collection |
+| Alloy | http://localhost:12345 | Alloy metrics collection |   ==> More changes will be coming in alloy
 
 ## Generating Traffic
 
@@ -354,8 +357,7 @@ Key engineering issues encountered and resolved during development:
 │   └── provisioning/
 │       ├── dashboards/
 │       └── datasources/
-├── prometheus/                  # Prometheus configs
-│   └── prometheus.yml
+├── prometheus.yml                  # Prometheus configs
 ├── otel-collector/              # OpenTelemetry Collector config
 │   └── config.yaml
 ├── alloy/                       # Grafana Alloy config
