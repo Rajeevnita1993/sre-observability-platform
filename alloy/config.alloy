@@ -40,12 +40,33 @@ discovery.relabel "svc" {
 loki.source.docker "logs" {
   host       = "unix:///var/run/docker.sock"
   targets    = discovery.relabel.svc.output
+  // forward_to = [loki.write.default.receiver]
+  forward_to = [loki.process.logs.receiver]
+}
+
+// ⚠️ MISCONFIGURATION: promotes trace_id to a high‑cardinality label
+loki.process "logs" {
   forward_to = [loki.write.default.receiver]
+
+  stage.json {
+    expressions = { trace_id = "trace_id" }
+  }
+
+  // BAD — do not do this in production.
+  // stage.labels {
+  //  values = { trace_id = "trace_id" }
+  // }
+
+  // GOOD — rides along with the line, never touches the label index
+  // stage.structured_metadata {
+  //  values = { trace_id = "trace_id" }
+  // }
 }
 
 // Push logs to Loki
 loki.write "default" {
   endpoint {
     url = "http://loki:3100/loki/api/v1/push"
+    tenant_id = "team-checkout"
   }
 }
