@@ -5,7 +5,27 @@ receivers:
       http: { endpoint: 0.0.0.0:4318 }
 
 processors:
+  memory_limiter:
+    check_interval: 2s
+    limit_mib: 512
+    spike_limit_mib: 128
+
   batch: {}
+
+  tail_sampling:
+    decision_wait: 30s
+    num_traces: 50000
+    expected_new_traces_per_sec: 20
+    policies:
+      - name: errors-policy
+        type: status_code
+        status_code: { status_codes: [ERROR] }
+      - name: slow-traces-policy
+        type: latency
+        latency: { threshold_ms: 500 }
+      - name: baseline-policy
+        type: probabilistic
+        probabilistic: { sampling_percentage: 10 }
 
 exporters:
   otlp/tempo:
@@ -23,10 +43,14 @@ exporters:
     endpoint: http://pyroscope:4318   # OTLP HTTP endpoint
 
 service:
+  telemetry:
+    metrics:
+      level: normal       
+      address: 0.0.0.0:8888
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, tail_sampling, batch]
       exporters: [otlp/tempo]
     logs:
       receivers: [otlp]

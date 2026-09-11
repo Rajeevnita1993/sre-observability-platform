@@ -104,7 +104,7 @@ services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.108.0
     command: ["--config=/etc/otelcol/config.yaml"]
-    ports: ["4317:4317","4318:4318"]   # OTLP gRPC / HTTP (host)
+    ports: ["4317:4317","4318:4318", "8888:8888"]   # OTLP gRPC / HTTP (host)
     volumes: ["./otel-collector/config.yaml:/etc/otelcol/config.yaml"]
     depends_on: [tempo, loki, mimir]
 

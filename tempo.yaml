@@ -12,6 +12,54 @@ distributor:
         http:
           endpoint: "0.0.0.0:4318"
 
+# ---- ingester tuning  ----
+ingester:
+  trace_idle_period: 10s         # trace completes after 10s of no new spans
+  flush_check_period: 5s         # check for idle traces every 5s
+  complete_block_timeout: 1m     # flush a complete block after 1m inactivity
+  max_block_duration: 5m         # also close a block after 5m regardless
+  max_block_bytes: 524288000
+# ----  ----
+
+compactor:
+  compaction:
+    block_retention: 24h
+    compacted_block_retention: 1h
+    compaction_window: 1h
+    compaction_cycle: 30s           # explicit, though it's the default
+
+metrics_generator:
+  # registry — how often to emit + what labels to attach to every series
+  registry:
+    collection_interval: 15s
+    external_labels:
+      source: tempo
+
+  # Storage — where the WAL lives and where to remote_write
+  storage:
+    path: /tmp/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true          # makes metric → trace jump work in Grafana
+
+  processor:
+    # per-operation RED metrics
+    span_metrics:
+      histogram_buckets: [0.002, 0.004, 0.008, 0.016, 0.032,
+                          0.064, 0.128, 0.256, 0.512, 1.02, 2.05, 4.10]
+      dimensions:                     # extra low-cardinality span attributes
+        - http.method
+        - http.status_code
+        - messaging.system
+
+    # service topology edges
+    service_graphs:
+      histogram_buckets: [0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6.4]
+      dimensions:
+        - messaging.system
+      wait: 10s                       # must be > async hop latency
+      max_items: 10000                # in-flight half-pair buffer
+
 storage:
   trace:
     backend: local
@@ -19,6 +67,13 @@ storage:
       path: /tmp/tempo/wal
     local:
       path: /tmp/tempo/blocks
+
+# ---- Master switch — activates the processors above ----
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [span-metrics, service-graphs]
+      generate_native_histograms: both
 
 usage_report:
   reporting_enabled: false

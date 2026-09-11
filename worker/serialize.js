@@ -5,13 +5,17 @@ function deepClone(obj) {
 }
 
 module.exports.serializeResult = function (order) {
-  // 👇 Wrap the hot function with a label
-  return Pyroscope.wrapWithLabels({ span_name: 'serializeResult' }, () => {
+  let body;
+  Pyroscope.wrapWithLabels({ span_name: 'serializeResult' }, () => {
     let acc = { order, items: [] };
-    for (let i = 0; i < 2000; i++) {
+    // Simulate a CPU-intensive operation by creating a large array of items
+    // If you want to test the performance impact, you can increase the number of iterations
+    // otherwise, we should keep it reasonable to avoid excessive CPU usage during testing
+    for (let i = 0; i < 20; i++) {
       acc = deepClone(acc);
       acc.items.push({ i, ts: Date.now() });
     }
-    return Buffer.from(JSON.stringify(acc));
+    body = Buffer.from(JSON.stringify(acc));
   });
+  return body;
 };

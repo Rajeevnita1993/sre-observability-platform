@@ -8,7 +8,7 @@ datasources:
     jsonData:
       # metric → trace (exemplar linking)
       exemplarTraceIdDestinations:
-        - name: trace_id
+        - name: traceID
           datasourceUid: tempo
           urlDisplayLabel: '🔍 View Trace in Tempo' 
 
@@ -39,6 +39,8 @@ datasources:
     uid: tempo
     url: http://tempo:3200
     jsonData:
+      serviceMap:
+        datasourceUid: prometheus
       # trace → logs (log correlation)
       tracesToLogsV2:
         datasourceUid: loki
@@ -58,6 +60,8 @@ datasources:
         tags:
            - key: 'service.name'
              value: 'service_name'
+      nodegraph:
+        enabled: true
 
   - name: Pyroscope
     type: grafana-pyroscope-datasource
