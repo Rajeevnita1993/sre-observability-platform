@@ -95,7 +95,14 @@ app.post('/orders', async (req, res) => {
         await new Promise(r => setTimeout(r, 700));   // trace > 500ms → slow-traces-policy
       }
 
-      const { item, qty } = req.body || {};
+      const { item, qty, customer_email, payment_note } = req.body || {};
+      if (customer_email) {
+        span.setAttribute('customer.email', customer_email);
+      }
+
+      if (payment_note) {
+        span.setAttribute('payment.note', payment_note);
+      }
 
       // Validation
       if (!item || !Number.isInteger(qty) || qty < 1) {
@@ -126,6 +133,7 @@ app.post('/orders', async (req, res) => {
         'messaging.system': 'aws_sns',
         'messaging.destination.name': process.env.TOPIC_ARN || 'orders-topic',
         'messaging.destination.kind': 'topic',
+        'peer.service': 'worker',
       });
 
       try {

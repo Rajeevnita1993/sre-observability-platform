@@ -156,6 +156,7 @@ async function processOneMessage(m) {
           s3Span.setAttributes({
             'rpc.system': 'aws-api',
             'aws.s3.bucket': process.env.RESULT_BUCKET || 'order-results',
+            'peer.service': 's3',
           });
 
           try {

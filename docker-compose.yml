@@ -75,6 +75,7 @@ services:
   tempo:
     image: grafana/tempo:2.6.0
     command: ["-config.file=/etc/tempo.yaml"]
+    user: root
     ports: ["3200:3200","4317","4318"]
     volumes: ["./tempo.yaml:/etc/tempo.yaml"]
 
@@ -101,12 +102,49 @@ services:
     volumes:
       - pyroscope-data:/var/lib/pyroscope
 
-  otel-collector:
+  # otel-collector:
+  #   image: otel/opentelemetry-collector-contrib:0.108.0
+  #   command: ["--config=/etc/otelcol/config.yaml"]
+  #   ports: ["4317:4317","4318:4318", "8888:8888"]   # OTLP gRPC / HTTP (host)
+  #   volumes: ["./otel-collector/config.yaml:/etc/otelcol/config.yaml"]
+  #   depends_on: [tempo, loki, mimir]
+
+  otel-collector-agent:
     image: otel/opentelemetry-collector-contrib:0.108.0
     command: ["--config=/etc/otelcol/config.yaml"]
-    ports: ["4317:4317","4318:4318", "8888:8888"]   # OTLP gRPC / HTTP (host)
-    volumes: ["./otel-collector/config.yaml:/etc/otelcol/config.yaml"]
-    depends_on: [tempo, loki, mimir]
+    ports: ["4317:4317", "4318:4318", "8888:8888", "13133:13133"]
+    volumes: ["./otel-collector/agent-config.yaml:/etc/otelcol/config.yaml"]
+    depends_on: [otel-collector-gateway]
+
+  otel-collector-gateway:
+    image: otel/opentelemetry-collector-contrib:0.108.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports: ["5317:4317", "5318:4318", "8889:8888", "13134:13133"]
+    volumes: ["./otel-collector/gateway-config.yaml:/etc/otelcol/config.yaml"]
+    depends_on: [tempo, mimir, loki]
+
+  otel-collector-gateway-2:
+    image: otel/opentelemetry-collector-contrib:0.108.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "5417:4317"
+      - "5418:4318"
+      - "8890:8888"
+      - "13135:13133"
+    volumes:
+      - ./otel-collector/gateway-config.yaml:/etc/otelcol/config.yaml
+    depends_on: [tempo, mimir, loki]
+    # no host ports — internal only
+
+  # gateway-lb:
+  #   image: nginx:1.27-alpine
+  #   volumes:
+  #     - ./otel-collector/gateway-lb.conf:/etc/nginx/nginx.conf:ro
+  #   ports:
+  #     - "5417:4317"    # exposed for debugging — optional
+  #   depends_on:
+  #     - otel-collector-gateway
+  #     - otel-collector-gateway-2
 
   alloy:
     image: grafana/alloy:v1.3.1
@@ -143,12 +181,34 @@ services:
       AWS_ACCESS_KEY_ID: "test"
       AWS_SECRET_ACCESS_KEY: "test"
       TOPIC_ARN: "arn:aws:sns:us-east-1:000000000000:orders"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector-agent:4317"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc" 
       OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: "http/protobuf"
       OTEL_SERVICE_NAME: "api"
       PYROSCOPE_SERVER_ADDRESS: "http://pyroscope:4040"
-    depends_on: [localstack, otel-collector]
+    depends_on: [localstack, otel-collector-agent]
+
+  # api-auto:
+  #   build: ./api-auto
+  #   volumes:
+  #     - ./api-auto:/app
+  #     - ./shared:/app/shared
+  #     - /app/node_modules
+  #   ports: ["8082:8080"]
+  #   restart: unless-stopped
+  #   command: ["node", "--require", "@opentelemetry/auto-instrumentations-node/register", "app.js"]
+  #   environment:
+  #     AWS_ENDPOINT: "http://localstack:4566"
+  #     AWS_REGION: "us-east-1"
+  #     AWS_ACCESS_KEY_ID: "test"
+  #     AWS_SECRET_ACCESS_KEY: "test"
+  #     TOPIC_ARN: "arn:aws:sns:us-east-1:000000000000:orders"
+  #     OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector-agent:4317"
+  #     OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  #     OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: "http/protobuf"
+  #     OTEL_SERVICE_NAME: "api-auto"
+  #     OTEL_NODE_DISABLED_INSTRUMENTATIONS: "fs,aws-sdk"
+  #   depends_on: [localstack, otel-collector-agent]
 
   worker:
     build: ./worker
@@ -165,12 +225,12 @@ services:
       AWS_SECRET_ACCESS_KEY: "test"
       QUEUE_URL: "http://localstack:4566/000000000000/orders-queue"
       RESULT_BUCKET: "order-results"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector-agent:4317"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc" 
       OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: "http/protobuf"
       OTEL_SERVICE_NAME: "worker"
       PYROSCOPE_SERVER_ADDRESS: "http://pyroscope:4040"
-    depends_on: [localstack, otel-collector]
+    depends_on: [localstack, otel-collector-agent]
 
   # docker-compose.yml  — add under services:
   node-exporter:
@@ -211,5 +271,6 @@ services:
       - '--storage.path=/alertmanager'
 
 volumes:
+  #tempo-data: {}
   pyroscope-data: {}
   mimir-data: {}

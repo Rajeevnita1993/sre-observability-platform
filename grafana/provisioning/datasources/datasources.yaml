@@ -16,6 +16,10 @@ datasources:
     type: prometheus
     uid: mimir
     url: http://mimir:9009/prometheus
+    jsonData:
+      httpHeaderName1: X-Scope-OrgID
+    secureJsonData:
+      httpHeaderValue1: team-checkout
 
   - name: Loki
     type: loki
@@ -32,7 +36,7 @@ datasources:
           datasourceUid: tempo
           urlDisplayLabel: '🔍 View Trace in Tempo' #  Keep this as urlLabel (Loki uses this)
     secureJsonData:
-      httpHeaderValue1: fake
+      httpHeaderValue1: team-checkout
 
   - name: Tempo
     type: tempo

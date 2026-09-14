@@ -49,3 +49,9 @@ mimir/data/
 .clinerules/
 .continue/
 .continueignore
+
+# api code meant for auto-instrumentation testing
+api-auto/
+
+# test scripts
+check_trace.sh

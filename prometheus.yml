@@ -29,6 +29,10 @@ scrape_configs:
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: '^go_.*'
+        action: drop
 
   - job_name: worker
     file_sd_configs:
@@ -44,7 +48,7 @@ scrape_configs:
         replacement: dev
     metric_relabel_configs:
       - source_labels: [__name__]
-        regex: 'go_gc_.*|go_memstats_.*'
+        regex: 'nodejs_gc_duration_seconds.*|nodejs_heap_space_size_.*'
         action: drop
 
   - job_name: node-exporter
@@ -53,10 +57,14 @@ scrape_configs:
         refresh_interval: 30s
     metric_relabel_configs:
       - source_labels: [__name__]
-        regex: 'go_gc_.*|go_memstats_.*'
+        regex: '^go_.*'
         action: drop
         
 
   - job_name: cadvisor
     static_configs:
       - targets: ['cadvisor:8080']
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: '^go_.*'
+        action: drop
