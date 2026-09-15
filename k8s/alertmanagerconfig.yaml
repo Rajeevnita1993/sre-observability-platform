@@ -1,0 +1,32 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: order-pipeline-routing
+  namespace: monitoring
+spec:
+  route:
+    receiver: default-webhook
+    groupBy: ['alertname', 'queue']
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+    routes:
+      - matchers: [{ name: severity, value: critical }]
+        receiver: pager
+      - matchers: [{ name: severity, value: warning }]
+        receiver: slack-stub
+  receivers:
+    - name: default-webhook
+      webhookConfigs: [{ url: 'http://localhost:5001/default' }]
+    - name: pager
+      webhookConfigs: [{ url: 'http://localhost:5001/pager' }]
+    - name: slack-stub
+      webhookConfigs: [{ url: 'http://localhost:5001/slack' }]
+  inhibitRules:
+    - sourceMatch:                # SINGULAR — CRD field name
+        - { name: alertname, value: SqsBacklogGrowing }
+        - { name: severity,  value: critical }
+      targetMatch:                # SINGULAR
+        - { name: alertname, value: HighLatency }
+        - { name: severity,  value: warning }
+      equal: ['queue']
