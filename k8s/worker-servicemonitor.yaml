@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: worker
+  namespace: default
+  labels:
+    release: kps          # matches Prometheus CR selector 
+spec:
+  selector:
+    matchLabels:
+      app: worker          # svc/worker metadata.labels
+  endpoints:
+    - port: metrics       # worker's port name
+      path: /metrics
+      interval: 15s

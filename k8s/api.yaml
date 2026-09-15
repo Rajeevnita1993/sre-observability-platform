@@ -27,7 +27,14 @@ spec:
 ---
 apiVersion: v1
 kind: Service
-metadata: { name: api }
+metadata:
+  name: api
+  labels:
+    app: api          # this is what the ServiceMonitor selects on
 spec:
-  selector: { app: api }
-  ports: [{ port: 8080, targetPort: 8080 }]
+  selector:
+    app: api
+  ports:
+    - name: http      # named port, ServiceMonitor references this
+      port: 8080
+      targetPort: 8080

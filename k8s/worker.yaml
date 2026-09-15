@@ -23,11 +23,21 @@ spec:
         - name: worker
           image: obs-worker:day41
           imagePullPolicy: Never
+          ports:
+            - name: metrics       # NEW — required for PodMonitor
+              containerPort: 9464
           envFrom: [{ configMapRef: { name: worker-config } }]
 ---
 apiVersion: v1
 kind: Service
-metadata: { name: worker }
+metadata:
+  name: worker
+  labels:
+    app: worker       
 spec:
-  selector: { app: worker }
-  ports: [{ port: 9464, targetPort: 9464 }]  # metrics port, no inbound app traffic
+  selector:
+    app: worker
+  ports:
+    - name: metrics   
+      port: 9464
+      targetPort: 9464

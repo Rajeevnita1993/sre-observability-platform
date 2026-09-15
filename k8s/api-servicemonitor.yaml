@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: api
+  namespace: default
+  labels:
+    release: kps          # must match Prometheus CR's serviceMonitorSelector
+spec:
+  selector:
+    matchLabels:
+      app: api            # matches Service metadata.labels, not Pod labels
+  endpoints:
+    - port: http          # the Service port's name 
+      path: /metrics
+      interval: 15s

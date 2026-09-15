@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: worker-pods
+  namespace: default
+  labels:
+    release: kps                    # must match Prometheus CR selector
+spec:
+  selector:
+    matchLabels:
+      app: worker                   # Deployment's pod template label
+  podMetricsEndpoints:
+    - port: metrics                 # container port NAME, not Service port
+      path: /metrics
+      interval: 15s
