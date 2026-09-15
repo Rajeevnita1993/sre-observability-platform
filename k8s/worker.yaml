@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: worker-config }
+data:
+  AWS_ENDPOINT: "http://localstack:4566"
+  AWS_REGION: "us-east-1"
+  AWS_ACCESS_KEY_ID: "test"
+  AWS_SECRET_ACCESS_KEY: "test"
+  QUEUE_URL: "http://localstack:4566/000000000000/orders-queue"
+  RESULT_BUCKET: "order-results"
+  OTEL_SERVICE_NAME: "worker"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: worker, labels: { app: worker } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: worker } }
+  template:
+    metadata: { labels: { app: worker } }
+    spec:
+      containers:
+        - name: worker
+          image: obs-worker:day41
+          imagePullPolicy: Never
+          envFrom: [{ configMapRef: { name: worker-config } }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: worker }
+spec:
+  selector: { app: worker }
+  ports: [{ port: 9464, targetPort: 9464 }]  # metrics port, no inbound app traffic
