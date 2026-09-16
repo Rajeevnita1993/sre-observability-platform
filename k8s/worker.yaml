@@ -17,7 +17,11 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: worker } }
   template:
-    metadata: { labels: { app: worker } }
+    metadata:
+      labels:
+        app: worker
+      annotations:                             
+        observability.io/team: checkout
     spec:
       containers:
         - name: worker

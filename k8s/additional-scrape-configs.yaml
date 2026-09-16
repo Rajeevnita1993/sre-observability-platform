@@ -1,0 +1,31 @@
+- job_name: k8s-pod-sd-demo
+  kubernetes_sd_configs:
+    - role: pod
+  relabel_configs:
+    # Step 3 — keep only api/worker Pods
+    - source_labels: [__meta_kubernetes_pod_label_app]
+      regex: (api|worker)
+      action: keep
+
+    # Step 4 — belt-and-suspenders drop for system namespaces
+    - source_labels: [__meta_kubernetes_namespace]
+      regex: kube-system|kube-public|kube-node-lease|monitoring
+      action: drop
+
+    # Step 5a — promote Pod annotation → team label
+    - source_labels: [__meta_kubernetes_pod_annotation_observability_io_team]
+      action: replace
+      target_label: team
+
+    # Step 5b — standard target labels
+    - source_labels: [__meta_kubernetes_namespace]
+      target_label: namespace
+    - source_labels: [__meta_kubernetes_pod_name]
+      target_label: pod
+
+    # Step 5c — set __address__ to pod_ip:container_port
+    - source_labels: [__address__, __meta_kubernetes_pod_container_port_number]
+      action: replace
+      regex: (.+):(?:\d+);(\d+)
+      replacement: $1:$2
+      target_label: __address__

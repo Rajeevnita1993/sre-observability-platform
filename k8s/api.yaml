@@ -16,7 +16,11 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: api } }
   template:
-    metadata: { labels: { app: api } }
+    metadata:
+      labels: 
+        app: api
+      annotations:                              
+        observability.io/team: checkout
     spec:
       containers:
         - name: api
