@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lgtm-datasources
+  namespace: monitoring          # same namespace as the Grafana Pod
+  labels:
+    grafana_datasource: "1"      # sidecar discovery label
+data:
+  lgtm-datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        type: loki
+        uid: loki
+        url: http://loki.observability.svc.cluster.local:3100
+        jsonData:
+          derivedFields:
+            - name: TraceID
+              matcherType: regex
+              matcherRegex: '"trace_id":"(\w+)"'
+              url: '$${__value.raw}'
+              datasourceUid: tempo
+              urlDisplayLabel: '🔍 View Trace in Tempo'
+
+      - name: Mimir
+        type: prometheus
+        uid: mimir
+        url: http://mimir-gateway.observability.svc.cluster.local:80/prometheus
+        jsonData:
+          timeInterval: 30s
+          httpMethod: POST
+
+      - name: Tempo
+        type: tempo
+        uid: tempo
+        url: http://tempo.observability.svc.cluster.local:3200
+        jsonData:
+          serviceMap:
+            datasourceUid: prometheus
+          tracesToLogsV2:
+            datasourceUid: loki
+            spanStartTimeShift: '-5m'
+            spanEndTimeShift: '5m'
+            filterByTraceID: true
+            filterBySpanID: false
+            tags:
+              - key: 'service.name'
+                value: 'app'
+            customQuery: false
+          tracesToMetrics:
+            datasourceUid: prometheus
+          tracesToProfiles:
+            datasourceUid: pyroscope
+            profileTypeId: wall:cpu:nanoseconds:wall:nanoseconds
+            tags:
+              - key: 'service.name'
+                value: 'service_name'
+          nodegraph:
+            enabled: true
+
+      - name: Pyroscope
+        type: grafana-pyroscope-datasource
+        uid: pyroscope
+        url: http://pyroscope.observability.svc.cluster.local:4040
+        jsonData:
+          backendType: pyroscope
