@@ -1,0 +1,233 @@
+mode: deployment
+replicaCount: 1
+image:
+  repository: otel/opentelemetry-collector-contrib
+
+resources:
+  requests: { cpu: 200m, memory: 256Mi }
+  limits:   { cpu: 1000m, memory: 1Gi }
+
+ports:
+  otlp:
+    enabled: true
+  otlp-http:
+    enabled: true
+  metrics:
+    enabled: true
+
+config:
+  extensions:
+    health_check:
+      endpoint: 0.0.0.0:13133
+
+  receivers:
+    otlp:
+      protocols:
+        grpc: { endpoint: 0.0.0.0:4317 }
+        http: { endpoint: 0.0.0.0:4318 }
+    prometheus:
+      config:
+        scrape_configs:
+          - job_name: 'node-exporter'
+            scrape_interval: 15s
+            static_configs:
+              - targets: ['kps-prometheus-node-exporter.monitoring.svc.cluster.local:9100']
+
+  connectors:
+    spanmetrics:
+      namespace: "traces.span.metrics"
+      histogram:
+        explicit:
+          buckets: [2ms, 10ms, 100ms, 500ms, 1s, 5s]
+      dimensions:
+        - name: http.status_code
+
+  processors:
+    memory_limiter:
+      check_interval: 2s
+      limit_mib: 1024
+      spike_limit_mib: 256
+
+    resource:
+      attributes:
+        - key: deployment.environment
+          value: local-dev
+          action: upsert
+        - key: service.namespace
+          value: observability-project
+          action: upsert
+
+    attributes/redact_secrets:
+      actions:
+        - key: authorization
+          action: delete
+        - key: Authorization
+          action: delete
+        - key: cookie
+          action: delete
+        - key: Cookie
+          action: delete
+
+    attributes/hash_pii:
+      actions:
+        - key: customer.email
+          action: hash
+
+    attributes/checkout-team:
+      include:
+        match_type: regexp
+        span_names: ["^POST"]
+      actions:
+        - key: team
+          value: checkout
+          action: insert
+
+    transform:
+      trace_statements:
+        - context: span
+          statements:
+            - replace_pattern(attributes["http.target"], "^/orders/[0-9]+$", "/orders/{id}")
+            - set(name, "POST /orders/{id}") where IsMatch(name, "^POST /orders/[0-9]+$")
+            - delete_key(attributes, "http.request.header.cookie")
+        - context: resource
+          statements:
+            - delete_key(attributes, "process.command_line")
+
+    transform/mask_cc:
+      error_mode: ignore
+      log_statements:
+        - context: log
+          statements:
+            - replace_pattern(body, "\\d{4}-\\d{4}-\\d{4}-\\d{4}", "****-****-****-****")
+      trace_statements:
+        - context: span
+          statements:
+            - replace_pattern(attributes["payment.note"], "\\d{4}-\\d{4}-\\d{4}-\\d{4}", "****-****-****-****")
+
+    filter/drop_debug_logs:
+      error_mode: ignore
+      logs:
+        log_record:
+          - 'severity_number < SEVERITY_NUMBER_INFO'
+
+    filter/drop_health_spans:
+      error_mode: ignore
+      traces:
+        span:
+          - 'attributes["http.target"] == "/healthz"'
+          - 'attributes["http.target"] == "/metrics"'
+
+    filter/drop_metric:
+      error_mode: ignore
+      metrics:
+        metric:
+          - 'IsMatch(name, "^go_.*")'
+
+    batch:
+      timeout: 5s
+      send_batch_size: 8192
+      send_batch_max_size: 10000
+
+    tail_sampling:
+      decision_wait: 30s
+      num_traces: 50000
+      expected_new_traces_per_sec: 20
+      policies:
+        - name: errors-capped
+          type: and
+          and:
+            and_sub_policy:
+              - name: is-error
+                type: status_code
+                status_code: { status_codes: [ERROR] }
+              - name: under-budget-err
+                type: rate_limiting
+                rate_limiting: { spans_per_second: 60 }
+        - name: slow-traces-capped
+          type: and
+          and:
+            and_sub_policy:
+              - name: is-slow
+                type: latency
+                latency: { threshold_ms: 500 }
+              - name: under-budget-slow
+                type: rate_limiting
+                rate_limiting: { spans_per_second: 60 }
+        - name: worker-errors-always-keep
+          type: and
+          and:
+            and_sub_policy:
+              - name: is-error
+                type: status_code
+                status_code: { status_codes: [ERROR] }
+              - name: is-worker-service
+                type: string_attribute
+                string_attribute:
+                  key: service.name
+                  values: [worker]
+        - name: checkout-team-always-keep
+          type: string_attribute
+          string_attribute:
+            key: team
+            values: [checkout]
+        - name: baseline-policy
+          type: probabilistic
+          probabilistic: { sampling_percentage: 10 }
+
+  exporters:
+    otlp_grpc/tempo:
+      endpoint: tempo.observability.svc.cluster.local:4317
+      tls: { insecure: true }
+    prometheus:
+      endpoint: 0.0.0.0:9464
+    otlp_http/loki:
+      endpoint: http://loki.observability.svc.cluster.local:3100/otlp
+    prometheusremotewrite:
+      endpoint: http://mimir-gateway.observability.svc.cluster.local:80/api/v1/push
+      resource_to_telemetry_conversion:
+        enabled: true
+
+  service:
+    extensions: [health_check]
+    telemetry:
+      metrics:
+        level: normal
+        readers:
+          - pull:
+              exporter:
+                prometheus:
+                  host: 0.0.0.0
+                  port: 8888
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors:
+          - memory_limiter
+          - resource
+          - attributes/checkout-team
+          - attributes/redact_secrets
+          - attributes/hash_pii
+          - transform
+          - transform/mask_cc
+          - filter/drop_health_spans
+          - tail_sampling
+          - batch
+        exporters: [otlp_grpc/tempo, spanmetrics]
+      metrics:
+        receivers: [otlp, prometheus]
+        processors: [memory_limiter, resource, filter/drop_metric, batch]
+        exporters: [prometheusremotewrite, prometheus]
+      metrics/spanmetrics:
+        receivers: [spanmetrics]
+        processors: [memory_limiter, resource, batch]
+        exporters: [prometheusremotewrite]
+      logs:
+        receivers: [otlp]
+        processors:
+          - memory_limiter
+          - resource
+          - attributes/redact_secrets
+          - transform/mask_cc
+          - filter/drop_debug_logs
+          - batch
+        exporters: [otlp_http/loki]

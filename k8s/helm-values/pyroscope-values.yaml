@@ -1,0 +1,20 @@
+pyroscope:
+  replicaCount: 1
+
+  # persistence — uses the cluster's default StorageClass (your "standard")
+  persistence:
+    enabled: true
+    size: 2Gi
+
+  # resource trims for Kind
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# disable the bundled Alloy sub-chart — you already have Alloy in step 5
+alloy:
+  enabled: false

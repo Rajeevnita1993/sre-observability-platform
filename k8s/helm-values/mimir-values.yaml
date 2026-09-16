@@ -1,0 +1,55 @@
+mimir:
+  structuredConfig:
+    multitenancy_enabled: false
+    ingest_storage:
+      enabled: false
+    ingester:
+      push_grpc_method_enabled: true
+      ring:
+        kvstore:
+          store: memberlist
+        replication_factor: 1
+    store_gateway:
+      sharding_ring:
+        kvstore:
+          store: memberlist
+    blocks_storage:
+      backend: s3
+      s3:
+        endpoint: mimir-minio.observability.svc:9000
+        bucket_name: mimir-tsdb
+        access_key_id: mimir
+        secret_access_key: mimir123
+        insecure: true
+
+kafka:
+  enabled: false
+
+minio:
+  enabled: true
+  rootUser: mimir
+  rootPassword: mimir123
+  persistence:
+    storageClass: standard
+    size: 5Gi
+
+alertmanager:     { enabled: false }
+ruler:            { enabled: false }
+overrides_exporter: { enabled: false }
+
+# Disable zone-aware replication — single node, single zone
+ingester:
+  replicas: 1
+  zoneAwareReplication:
+    enabled: false
+
+store_gateway:
+  replicas: 1
+  zoneAwareReplication:
+    enabled: false
+
+distributor:    { replicas: 1 }
+querier:        { replicas: 1 }
+query_frontend: { replicas: 1 }
+compactor:      { replicas: 1 }
+query_scheduler: { enabled: true, replicas: 1 }

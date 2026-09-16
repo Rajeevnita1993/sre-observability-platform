@@ -8,6 +8,9 @@ data:
   AWS_SECRET_ACCESS_KEY: "test"
   TOPIC_ARN: "arn:aws:sns:us-east-1:000000000000:orders"
   OTEL_SERVICE_NAME: "api"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-gateway-opentelemetry-collector.observability.svc.cluster.local:4317"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  PYROSCOPE_SERVER_ADDRESS: "http://pyroscope.observability.svc.cluster.local:4040" 
 ---
 apiVersion: apps/v1
 kind: Deployment
