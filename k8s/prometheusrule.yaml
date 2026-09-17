@@ -2,9 +2,9 @@ apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
   name: order-pipeline-rules
-  namespace: monitoring        # CHANGED — required by ruleNamespaceSelector={}
+  namespace: monitoring        # required by ruleNamespaceSelector={}
   labels:
-    release: kps               # CHANGED — required by ruleSelector
+    release: kps               # required by ruleSelector
 spec:
   groups:
     - name: http_slis
@@ -46,3 +46,49 @@ spec:
           annotations:
             summary: "p95 write latency high on {{ $labels.queue }}"
             description: "p95 is {{ $value }}s (>2s) for 5m — worker may be struggling."
+    - name: slo_burn_rate_alerts          # ← NEW group
+      rules:
+        - alert: HighBurnRateFast
+          expr: |
+            (
+              sum(rate(http_requests_total{job="api",status=~"5.."}[1h]))
+                /
+              sum(rate(http_requests_total{job="api"}[1h]))
+              > 14.4 * 0.005
+            )
+            and
+            (
+              sum(rate(http_requests_total{job="api",status=~"5.."}[5m]))
+                /
+              sum(rate(http_requests_total{job="api"}[5m]))
+              > 14.4 * 0.005
+            )
+          for: 2m
+          labels:
+            severity: critical
+            route_to: page
+          annotations:
+            summary: "api error budget burn rate > 14.4x (page)"
+            description: "1h error ratio {{ $value | humanizePercentage }}, confirmed over the last 5m. Budget exhausts in ~2 days at this rate."
+        - alert: HighBurnRateSlow
+          expr: |
+            (
+              sum(rate(http_requests_total{job="api",status=~"5.."}[6h]))
+                /
+              sum(rate(http_requests_total{job="api"}[6h]))
+              > 6 * 0.005
+            )
+            and
+            (
+              sum(rate(http_requests_total{job="api",status=~"5.."}[30m]))
+                /
+              sum(rate(http_requests_total{job="api"}[30m]))
+              > 6 * 0.005
+            )
+          for: 15m
+          labels:
+            severity: warning
+            route_to: ticket
+          annotations:
+            summary: "api error budget burn rate > 6x (ticket)"
+            description: "6h error ratio {{ $value | humanizePercentage }}, confirmed over the last 30m. Budget exhausts in ~5 days at this rate."
