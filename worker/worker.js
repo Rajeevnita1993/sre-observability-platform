@@ -1,6 +1,7 @@
 // worker/worker.js
 require('./profiling');
 require('./tracing');
+// require('./debug-server');   // was used to test locking and validateBatch()
 
 const { SQSClient, ReceiveMessageCommand, DeleteMessageCommand, GetQueueAttributesCommand } =
   require('@aws-sdk/client-sqs');
@@ -24,6 +25,7 @@ const {
 
 const { serializeResult } = require('./serialize');
 const { writeOrderResult } = require('./s3writer');
+const { cacheResult } = require('./resultsCache');
 
 const cfg = {
   region: process.env.AWS_REGION,
@@ -180,6 +182,7 @@ async function processOneMessage(m) {
             const durationSeconds = Number(process.hrtime.bigint() - startTime) / 1e9;
             s3WriteHist.record(durationSeconds);
             jobsProcessed.add(1, { status: 'ok' });
+            cacheResult(order.id, { order, body: body.toString('base64') });
 
             s3Span.setStatus({ code: SpanStatusCode.OK });
 

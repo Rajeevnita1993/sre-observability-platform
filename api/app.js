@@ -14,6 +14,8 @@ const sns = new SNSClient({
   endpoint: process.env.AWS_ENDPOINT,   // http://localstack:4566
 });
 
+const SKU_PATTERN = /^[A-Z]{2,4}-\d{4,8}$/;
+
 const app = express();
 addMetrics(app);
 app.use(express.json({ limit: '5mb' }));
@@ -79,6 +81,17 @@ app.post('/debug/outbound-ping', (req, res) => {
   });
 });
 
+
+function validateOrder({ item, qty }) {
+  if (!item || !Number.isInteger(qty) || qty < 1) {
+    return 'item (string) and qty (int>=1) required';
+  }
+  if (!SKU_PATTERN.test(item)) {
+    return 'item must match ABC-1234 style SKU format';
+  }
+  return null;
+}
+
 app.post('/orders', async (req, res) => {
   // ---- SERVER span ----
   await tracer.startActiveSpan('POST /orders', { kind: SpanKind.SERVER }, async (span) => {
@@ -105,17 +118,18 @@ app.post('/orders', async (req, res) => {
       }
 
       // Validation
-      if (!item || !Number.isInteger(qty) || qty < 1) {
+      const validationError = validateOrder({ item, qty });
+      if (validationError) {
         log.error(withTrace({
           status: 400,
           item,
           qty,
-          msg: 'Invalid order request',
+          msg: validationError,
         }));
         span.setStatus({ code: SpanStatusCode.ERROR, message: 'Invalid order request' });
         span.setAttribute('http.status_code', 400);
         return res.status(400).json({
-          error: 'item (string) and qty (int>=1) required'
+          error: validationError
         });
       }
 
