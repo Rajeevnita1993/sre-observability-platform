@@ -34,12 +34,15 @@ module.exports.serializeResult = function (order) {
     // Simulate a CPU-intensive operation by creating a large array of items
     // If you want to test the performance impact, you can increase the number of iterations
     // otherwise, we should keep it reasonable to avoid excessive CPU usage during testing
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 1; i++) {
       acc = deepClone(acc);
       acc.items.push({ i, ts: Date.now() });
     }
 
-    const batch = buildBatch(3000);
+    // For profiling purposes, we can simulate a deduplication step on a batch of items. 
+    // We had kept at 3000 to simulate a realistic workload without overwhelming the CPU. 
+    // This can be adjusted based on profiling needs.
+    const batch = buildBatch(1);
     let unique;
     Pyroscope.wrapWithLabels({ span_name: 'dedupeItems' }, () => {
       unique = dedupeItems(batch);
