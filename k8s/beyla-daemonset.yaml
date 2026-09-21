@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: beyla
+  namespace: default
+spec:
+  selector:
+    matchLabels: {app: beyla}
+  template:
+    metadata:
+      labels: {app: beyla}
+    spec:
+      hostPID: true
+      serviceAccountName: beyla
+      containers:
+        - name: beyla
+          image: grafana/beyla:latest
+          securityContext:
+            privileged: true
+            appArmorProfile:
+              type: Unconfined
+          env:
+            - name: BEYLA_CONFIG_PATH
+              value: /config/beyla-config.yml
+            - name: BEYLA_KUBE_METADATA_ENABLE
+              value: "true"
+            - name: BEYLA_ENFORCE_SYS_CAPS
+              value: "1"
+          volumeMounts:
+            - {name: config, mountPath: /config}
+      volumes:
+        - name: config
+          configMap: {name: beyla-config}
