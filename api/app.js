@@ -155,7 +155,10 @@ app.post('/orders', async (req, res) => {
         const baggage = propagation.createBaggage({
           tenant: { value: 'team-checkout' },
         });
-        const messageAttributes = {};
+        const messageAttributes = {
+          receivedAtMs: { DataType: 'Number', StringValue: String(Date.now()) },
+        };
+
         context.with(trace.setSpan(context.active(), pubSpan), () => {
           // Inside here, pubSpan is the active span.
           const ctxWithBaggage = propagation.setBaggage(context.active(), baggage);

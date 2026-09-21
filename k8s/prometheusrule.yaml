@@ -92,3 +92,16 @@ spec:
           annotations:
             summary: "api error budget burn rate > 6x (ticket)"
             description: "6h error ratio {{ $value | humanizePercentage }}, confirmed over the last 30m. Budget exhausts in ~5 days at this rate."
+    - name: journey_slis
+      interval: 30s
+      rules:
+        - record: job:http_request_duration_seconds:fast_ratio5m
+          expr: |
+            sum(rate(http_request_duration_seconds_bucket{job="api",route="/orders",le="0.5"}[5m]))
+              /
+            sum(rate(http_request_duration_seconds_count{job="api",route="/orders"}[5m]))
+        - record: job:order_fulfillment_duration_seconds:fast_ratio5m
+          expr: |
+            sum(rate(order_fulfillment_duration_seconds_bucket{job="worker",le="10.0"}[5m]))
+              /
+            sum(rate(order_fulfillment_duration_seconds_count{job="worker"}[5m]))

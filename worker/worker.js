@@ -21,6 +21,7 @@ const {
   queueDepth,
   s3WriteHist,
   messagesConsumed,
+  orderFulfillmentDurationHist,
 } = require('./metrics');
 
 const { serializeResult } = require('./serialize');
@@ -88,6 +89,14 @@ function validateOrder(order) {
 async function processOneMessage(m) {
   const envelope = JSON.parse(m.Body);
   const order = JSON.parse(envelope.Message);
+
+  // extract api-side receipt timestamp from SNS attributes ──
+  // SNS sets `StringValue` at publish time; the SQS-wrapped SNS envelope
+  // exposes it as `.Value` (which is what snsMessageAttributesGetter reads).
+  const receivedAtMs = parseInt(
+    envelope.MessageAttributes?.receivedAtMs?.Value ?? '',
+    10
+  );
 
   messagesConsumed.add(1);
 
@@ -181,6 +190,10 @@ async function processOneMessage(m) {
 
             const durationSeconds = Number(process.hrtime.bigint() - startTime) / 1e9;
             s3WriteHist.record(durationSeconds);
+            //  end-to-end freshness (api receipt → S3 write confirmed) ──
+            if (Number.isFinite(receivedAtMs)) {
+              orderFulfillmentDurationHist.record((Date.now() - receivedAtMs) / 1000);
+            }
             jobsProcessed.add(1, { status: 'ok' });
             cacheResult(order.id, { order, body: body.toString('base64') });
 

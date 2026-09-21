@@ -35,9 +35,19 @@ const messagesConsumed = meter.createCounter(
   }
 );
 
+// HISTOGRAM — end-to-end freshness
+const orderFulfillmentDurationHist = meter.createHistogram(
+  'order_fulfillment_duration_seconds',
+  {
+    unit: 's',
+    description: 'Time from api receipt (receivedAtMs) to confirmed S3 write',
+  }
+);
+
 module.exports = {
   jobsProcessed,
   queueDepth,
   s3WriteHist,
   messagesConsumed,
+  orderFulfillmentDurationHist,
 };
