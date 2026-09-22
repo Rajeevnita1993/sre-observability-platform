@@ -33,6 +33,27 @@ const cfg = {
   endpoint: process.env.AWS_ENDPOINT,
 };
 
+// ─── bounded-concurrency mapper ─────────────────────────
+// Processes up to `limit` items concurrently. Preserves index order
+// in the returned array. Swallows per-item errors so one failure
+// doesn't kill the batch.
+async function mapConcurrent(items, limit, fn) {
+  const results = [];
+  let i = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) {
+      const idx = i++;
+      try {
+        results[idx] = await fn(items[idx]);
+      } catch (err) {
+        results[idx] = { error: err };
+      }
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 const sqs = new SQSClient(cfg);
 const s3 = new S3Client({ ...cfg, forcePathStyle: true });
 const tracer = trace.getTracer('order-worker');
@@ -285,10 +306,13 @@ async function processBatchAsFanIn(messages) {
   summarySpan.setAttributes({ 'batch.size': messages.length });
 
   try {
-    // 3. Process each message sequentially (or in parallel, but lab uses sequential)
-    for (const msg of messages) {
-      await processOneMessage(msg);
-    }
+    // 3. Process each message sequentially
+    // for (const msg of messages) {
+    //   await processOneMessage(msg);
+    // }
+
+    // 3. Process messages with bounded concurrency
+    await mapConcurrent(messages, Number(process.env.WORKER_CONCURRENCY || 10), processOneMessage);
 
     // 4. Add an event and end the summary span
     summarySpan.addEvent('batch_persisted', { 'batch.size': messages.length });
@@ -309,7 +333,7 @@ async function loop() {
   try {
     const { Messages } = await sqs.send(new ReceiveMessageCommand({
       QueueUrl: process.env.QUEUE_URL,
-      MaxNumberOfMessages: 5,
+      MaxNumberOfMessages: 10,    // was 5
       WaitTimeSeconds: 5,
       MessageAttributeNames: ['All'],
     }));
@@ -323,9 +347,13 @@ async function loop() {
     if (Messages.length >= 3) {
       await processBatchAsFanIn(Messages);
     } else {
-      for (const msg of Messages) {
-        await processOneMessage(msg);
-      }
+      // for (const msg of Messages) {
+      //   await processOneMessage(msg);
+      // }
+      // Process the batch with bounded concurrency.
+      // Batch-fan-in summary span only matters for larger batches; skip the
+      // extra span overhead for single messages.
+      await mapConcurrent(Messages, Number(process.env.WORKER_CONCURRENCY || 10), processOneMessage);
     }
   } catch (exception) {
     logger.error(withTrace({

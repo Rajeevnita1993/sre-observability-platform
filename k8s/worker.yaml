@@ -12,6 +12,7 @@ data:
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-gateway-opentelemetry-collector.observability.svc.cluster.local:4317"
   OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
   PYROSCOPE_SERVER_ADDRESS: "http://pyroscope.observability.svc.cluster.local:4040"
+  WORKER_CONCURRENCY: "10"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -28,7 +29,7 @@ spec:
     spec:
       containers:
         - name: worker
-          image: obs-worker:day41
+          image: obs-worker:1.1.6-concurrent
           imagePullPolicy: Never
           ports:
             - name: metrics       # NEW — required for PodMonitor
