@@ -1,0 +1,24 @@
+rule_files:
+  - rules-plain.yaml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="api",status="200"}'
+        values: '0+10x360'
+      - series: 'http_requests_total{job="api",status="500"}'
+        values: '0+0x300 0+3x60'
+    alert_rule_test:
+      - eval_time: 320m
+        alertname: AvailabilitySLOBurnRateTicket
+        exp_alerts: []
+      - eval_time: 355m
+        alertname: AvailabilitySLOBurnRateTicket
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              route_to: ticket
+              slo: availability
+            exp_annotations:
+              summary: "api error budget burn rate > 6x (ticket)"
+              description: "6h error ratio 4.364%, confirmed over the last 30m. Budget exhausts in ~5 days at this rate."
