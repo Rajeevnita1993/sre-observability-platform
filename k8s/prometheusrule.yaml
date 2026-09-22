@@ -42,12 +42,14 @@ spec:
           labels: {severity: critical}
           annotations:
             summary: "High 5xx ratio on {{ $labels.job }}"
+            runbook_url: "http://localhost:8081/runbooks/high-error-ratio.md"
         - alert: SqsBacklogGrowing
           expr: sqs_queue_depth{queue="orders-queue"} > 100
           for: 5m
           labels: {severity: critical}
           annotations:
             summary: "SQS backlog on {{ $labels.queue }}"
+            runbook_url: "http://localhost:8081/runbooks/sqs-backlog-growing.md"
         - alert: HighLatency
           expr: |
             histogram_quantile(0.95,
@@ -59,7 +61,8 @@ spec:
           annotations:
             summary: "p95 write latency high on {{ $labels.queue }}"
             description: "p95 is {{ $value }}s (>2s) for 5m — worker may be struggling."
-    - name: slo_burn_rate_alerts          # ← NEW group
+            runbook_url: "http://localhost:8081/runbooks/high-latency.md"
+    - name: slo_burn_rate_alerts
       interval: 30s
       rules:
         - alert: AvailabilitySLOBurnRatePage
@@ -85,6 +88,8 @@ spec:
           annotations:
             summary: "api error budget burn rate > 14.4x (page)"
             description: "1h error ratio {{ $value | humanizePercentage }}, confirmed over the last 5m. Budget exhausts in ~2 days at this rate."
+            runbook_url: "http://localhost:8081/runbooks/availability-slo-burn-rate-page.md"
+
         - alert: AvailabilitySLOBurnRateTicket
           expr: |
             (
@@ -108,6 +113,8 @@ spec:
           annotations:
             summary: "api error budget burn rate > 6x (ticket)"
             description: "6h error ratio {{ $value | humanizePercentage }}, confirmed over the last 30m. Budget exhausts in ~5 days at this rate."
+            runbook_url: "http://localhost:8081/runbooks/availability-slo-burn-rate-ticket.md"
+
         - alert: LatencySLOBurnRatePage
           expr: |
             (
@@ -135,6 +142,7 @@ spec:
           annotations:
             summary: "latency burn rate > 14.4x (page)"
             description: "1h slow ratio {{ $value | humanizePercentage }}, confirmed over the last 5m. At this rate the monthly latency budget exhausts in ~2 days."
+            runbook_url: "http://localhost:8081/runbooks/latency-slo-burn-rate-page.md"
 
         - alert: LatencySLOBurnRateTicket
           expr: |
@@ -163,6 +171,8 @@ spec:
           annotations:
             summary: "latency burn rate > 6x (ticket)"
             description: "6h slow ratio {{ $value | humanizePercentage }}, confirmed over the last 30m. At this rate the monthly latency budget exhausts in ~5 days."
+            runbook_url: "http://localhost:8081/runbooks/latency-slo-burn-rate-ticket.md"
+
         - alert: FreshnessSLOBurnRatePage
           expr: |
             (
@@ -190,6 +200,7 @@ spec:
           annotations:
             summary: "freshness burn rate > 14.4x (page)"
             description: "1h stale ratio {{ $value | humanizePercentage }}, confirmed over the last 5m. At this rate the monthly freshness budget exhausts in ~2 days."
+            runbook_url: "http://localhost:8081/runbooks/freshness-slo-burn-rate-page.md"
 
         - alert: FreshnessSLOBurnRateTicket
           expr: |
@@ -218,4 +229,4 @@ spec:
           annotations:
             summary: "freshness burn rate > 6x (ticket)"
             description: "6h stale ratio {{ $value | humanizePercentage }}, confirmed over the last 30m. At this rate the monthly freshness budget exhausts in ~5 days."
-    
+            runbook_url: "http://localhost:8081/runbooks/freshness-slo-burn-rate-ticket.md"
