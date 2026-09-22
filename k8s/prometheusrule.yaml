@@ -21,6 +21,19 @@ spec:
           expr: |
             histogram_quantile(0.95,
               sum by (le, job) (rate(http_request_duration_seconds_bucket[5m])))
+    - name: journey_slis
+      interval: 30s
+      rules:
+        - record: job:http_request_duration_seconds:fast_ratio5m
+          expr: |
+            sum(rate(http_request_duration_seconds_bucket{job="api",route="/orders",le="0.5"}[5m]))
+              /
+            sum(rate(http_request_duration_seconds_count{job="api",route="/orders"}[5m]))
+        - record: job:order_fulfillment_duration_seconds:fast_ratio5m
+          expr: |
+            sum(rate(order_fulfillment_duration_seconds_bucket{job="worker",le="10.0"}[5m]))
+              /
+            sum(rate(order_fulfillment_duration_seconds_count{job="worker"}[5m]))
     - name: service_alerts
       rules:
         - alert: HighErrorRatio
@@ -47,8 +60,9 @@ spec:
             summary: "p95 write latency high on {{ $labels.queue }}"
             description: "p95 is {{ $value }}s (>2s) for 5m — worker may be struggling."
     - name: slo_burn_rate_alerts          # ← NEW group
+      interval: 30s
       rules:
-        - alert: HighBurnRateFast
+        - alert: AvailabilitySLOBurnRatePage
           expr: |
             (
               sum(rate(http_requests_total{job="api",status=~"5.."}[1h]))
@@ -67,10 +81,11 @@ spec:
           labels:
             severity: critical
             route_to: page
+            slo: availability
           annotations:
             summary: "api error budget burn rate > 14.4x (page)"
             description: "1h error ratio {{ $value | humanizePercentage }}, confirmed over the last 5m. Budget exhausts in ~2 days at this rate."
-        - alert: HighBurnRateSlow
+        - alert: AvailabilitySLOBurnRateTicket
           expr: |
             (
               sum(rate(http_requests_total{job="api",status=~"5.."}[6h]))
@@ -89,19 +104,118 @@ spec:
           labels:
             severity: warning
             route_to: ticket
+            slo: availability
           annotations:
             summary: "api error budget burn rate > 6x (ticket)"
             description: "6h error ratio {{ $value | humanizePercentage }}, confirmed over the last 30m. Budget exhausts in ~5 days at this rate."
-    - name: journey_slis
-      interval: 30s
-      rules:
-        - record: job:http_request_duration_seconds:fast_ratio5m
+        - alert: LatencySLOBurnRatePage
           expr: |
-            sum(rate(http_request_duration_seconds_bucket{job="api",route="/orders",le="0.5"}[5m]))
-              /
-            sum(rate(http_request_duration_seconds_count{job="api",route="/orders"}[5m]))
-        - record: job:order_fulfillment_duration_seconds:fast_ratio5m
+            (
+              1 - (
+                sum(rate(http_request_duration_seconds_bucket{job="api",route="/orders",le="0.5"}[1h]))
+                  /
+                sum(rate(http_request_duration_seconds_count{job="api",route="/orders"}[1h]))
+              )
+              > 14.4 * 0.01
+            )
+            and
+            (
+              1 - (
+                sum(rate(http_request_duration_seconds_bucket{job="api",route="/orders",le="0.5"}[5m]))
+                  /
+                sum(rate(http_request_duration_seconds_count{job="api",route="/orders"}[5m]))
+              )
+              > 14.4 * 0.01
+            )
+          for: 2m
+          labels:
+            severity: critical
+            route_to: page
+            slo: latency
+          annotations:
+            summary: "latency burn rate > 14.4x (page)"
+            description: "1h slow ratio {{ $value | humanizePercentage }}, confirmed over the last 5m. At this rate the monthly latency budget exhausts in ~2 days."
+
+        - alert: LatencySLOBurnRateTicket
           expr: |
-            sum(rate(order_fulfillment_duration_seconds_bucket{job="worker",le="10.0"}[5m]))
-              /
-            sum(rate(order_fulfillment_duration_seconds_count{job="worker"}[5m]))
+            (
+              1 - (
+                sum(rate(http_request_duration_seconds_bucket{job="api",route="/orders",le="0.5"}[6h]))
+                  /
+                sum(rate(http_request_duration_seconds_count{job="api",route="/orders"}[6h]))
+              )
+              > 6 * 0.01
+            )
+            and
+            (
+              1 - (
+                sum(rate(http_request_duration_seconds_bucket{job="api",route="/orders",le="0.5"}[30m]))
+                  /
+                sum(rate(http_request_duration_seconds_count{job="api",route="/orders"}[30m]))
+              )
+              > 6 * 0.01
+            )
+          for: 15m
+          labels:
+            severity: warning
+            route_to: ticket
+            slo: latency
+          annotations:
+            summary: "latency burn rate > 6x (ticket)"
+            description: "6h slow ratio {{ $value | humanizePercentage }}, confirmed over the last 30m. At this rate the monthly latency budget exhausts in ~5 days."
+        - alert: FreshnessSLOBurnRatePage
+          expr: |
+            (
+              1 - (
+                sum(rate(order_fulfillment_duration_seconds_bucket{job="worker",le="10.0"}[1h]))
+                  /
+                sum(rate(order_fulfillment_duration_seconds_count{job="worker"}[1h]))
+              )
+              > 14.4 * 0.01
+            )
+            and
+            (
+              1 - (
+                sum(rate(order_fulfillment_duration_seconds_bucket{job="worker",le="10.0"}[5m]))
+                  /
+                sum(rate(order_fulfillment_duration_seconds_count{job="worker"}[5m]))
+              )
+              > 14.4 * 0.01
+            )
+          for: 2m
+          labels:
+            severity: critical
+            route_to: page
+            slo: freshness
+          annotations:
+            summary: "freshness burn rate > 14.4x (page)"
+            description: "1h stale ratio {{ $value | humanizePercentage }}, confirmed over the last 5m. At this rate the monthly freshness budget exhausts in ~2 days."
+
+        - alert: FreshnessSLOBurnRateTicket
+          expr: |
+            (
+              1 - (
+                sum(rate(order_fulfillment_duration_seconds_bucket{job="worker",le="10.0"}[6h]))
+                  /
+                sum(rate(order_fulfillment_duration_seconds_count{job="worker"}[6h]))
+              )
+              > 6 * 0.01
+            )
+            and
+            (
+              1 - (
+                sum(rate(order_fulfillment_duration_seconds_bucket{job="worker",le="10.0"}[30m]))
+                  /
+                sum(rate(order_fulfillment_duration_seconds_count{job="worker"}[30m]))
+              )
+              > 6 * 0.01
+            )
+          for: 15m
+          labels:
+            severity: warning
+            route_to: ticket
+            slo: freshness
+          annotations:
+            summary: "freshness burn rate > 6x (ticket)"
+            description: "6h stale ratio {{ $value | humanizePercentage }}, confirmed over the last 30m. At this rate the monthly freshness budget exhausts in ~5 days."
+    
