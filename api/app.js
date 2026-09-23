@@ -134,6 +134,18 @@ app.post('/orders', async (req, res) => {
       }
 
       const order = { id: crypto.randomUUID(), item, qty, ts: Date.now() };
+      // ----  optional cost hint for bulk orders ----
+      // Pass-through only — the worker is responsible for bounding the actual cost.
+      // Type-check at the api boundary so malformed clients don't poison messages.
+      if (Number.isInteger(req.body?.bulkSize) && req.body.bulkSize > 0) {
+        order.bulkSize = req.body.bulkSize;
+      }
+
+      // pass customer through for the orders.customer_id column
+      if (typeof req.body?.customerId === 'string' && req.body.customerId.length > 0) {
+        order.customerId = req.body.customerId;
+      }
+      
       log.info(withTrace({
         msg: 'Order created',
         order_id: order.id,
@@ -173,7 +185,10 @@ app.post('/orders', async (req, res) => {
 
         const command = new PublishCommand({
           TopicArn: process.env.TOPIC_ARN,
-          Message: JSON.stringify(order),
+          Message: JSON.stringify({
+            ...order,
+            publishedAtMs: Date.now(),
+          }),
           MessageAttributes: messageAttributes,
         });
 

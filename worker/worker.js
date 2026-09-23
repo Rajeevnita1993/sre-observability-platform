@@ -22,11 +22,13 @@ const {
   s3WriteHist,
   messagesConsumed,
   orderFulfillmentDurationHist,
+  sqsMessageAgeSeconds,
 } = require('./metrics');
 
 const { serializeResult } = require('./serialize');
 const { writeOrderResult } = require('./s3writer');
 const { cacheResult } = require('./resultsCache');
+const { recordOrder } = require('./db');
 
 const cfg = {
   region: process.env.AWS_REGION,
@@ -111,6 +113,14 @@ async function processOneMessage(m) {
   const envelope = JSON.parse(m.Body);
   const order = JSON.parse(envelope.Message);
 
+  // publish → consume age 
+  const publishedAtMs = Number(order.publishedAtMs);
+  if (Number.isFinite(publishedAtMs)) {
+    sqsMessageAgeSeconds.record((Date.now() - publishedAtMs) / 1000, {
+      queue: 'orders-queue',
+    });
+  }
+
   // extract api-side receipt timestamp from SNS attributes ──
   // SNS sets `StringValue` at publish time; the SQS-wrapped SNS envelope
   // exposes it as `.Value` (which is what snsMessageAttributesGetter reads).
@@ -181,6 +191,27 @@ async function processOneMessage(m) {
             'order.qty': order.qty,
           });
 
+          // ---- CPU burn for bulk orders ----
+          // order.bulkSize is a cost hint from the api: roughly N line items.
+          // ~1ms burn per item, capped at 2s so a single message can't stall the
+          // worker for minutes. CPU-bound on purpose — mapConcurrent cannot
+          // overlap CPU work, so expensive messages starve cheap ones. This is
+          // what makes the incident cost-shaped rather than capacity-shaped.
+          if (Number.isInteger(order.bulkSize) && order.bulkSize > 0) {
+            const burnMs = Math.min(order.bulkSize, 2000);
+            const deadline = Date.now() + burnMs;
+            let x = 0;
+            while (Date.now() < deadline) {
+              x = Math.sqrt(x + Math.random());
+            }
+            log.info(withTrace({
+              msg: 'bulk CPU burn complete',
+              order_id: order.id,
+              bulk_size: order.bulkSize,
+              burn_ms: burnMs,
+            }));
+          }
+
           // ---- S3 upload ----
           const s3Span = tracer.startSpan('s3.PutObject order-results', {
             kind: SpanKind.CLIENT,
@@ -215,6 +246,10 @@ async function processOneMessage(m) {
             if (Number.isFinite(receivedAtMs)) {
               orderFulfillmentDurationHist.record((Date.now() - receivedAtMs) / 1000);
             }
+
+            // persist order metadata. S3 already succeeded above;
+            // if this throws, the SQS message isn't deleted and redelivers.
+            await recordOrder(order);
             jobsProcessed.add(1, { status: 'ok' });
             cacheResult(order.id, { order, body: body.toString('base64') });
 

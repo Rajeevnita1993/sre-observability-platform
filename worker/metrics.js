@@ -44,10 +44,23 @@ const orderFulfillmentDurationHist = meter.createHistogram(
   }
 );
 
+// HISTOGRAM — publish → consume age
+const sqsMessageAgeSeconds = meter.createHistogram(
+  'sqs_message_age_seconds',
+  {
+    unit: 's',
+    description: 'Age of an SQS message at consumption time (publish → consume)',
+    advice: {
+      explicitBucketBoundaries: [1, 5, 15, 30, 60, 120, 300, 600],
+    },
+  }
+);
+
 module.exports = {
   jobsProcessed,
   queueDepth,
   s3WriteHist,
   messagesConsumed,
   orderFulfillmentDurationHist,
+  sqsMessageAgeSeconds,
 };

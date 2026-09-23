@@ -13,6 +13,10 @@ data:
   OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
   PYROSCOPE_SERVER_ADDRESS: "http://pyroscope.observability.svc.cluster.local:4040"
   WORKER_CONCURRENCY: "10"
+  PGHOST: "postgres.default.svc.cluster.local"
+  PGPORT: "5432"
+  PGUSER: "orders" 
+  PGDATABASE: "orders"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -29,12 +33,18 @@ spec:
     spec:
       containers:
         - name: worker
-          image: obs-worker:1.1.6-concurrent
+          image: obs-worker:1.1.9-pg
           imagePullPolicy: Never
           ports:
             - name: metrics       # NEW — required for PodMonitor
               containerPort: 9464
           envFrom: [{ configMapRef: { name: worker-config } }]
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
 ---
 apiVersion: v1
 kind: Service

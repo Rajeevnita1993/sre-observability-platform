@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-exporter
+  namespace: default
+  labels:
+    app: postgres-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-exporter
+  template:
+    metadata:
+      labels:
+        app: postgres-exporter
+    spec:
+      containers:
+        - name: postgres-exporter
+          image: prometheuscommunity/postgres-exporter:v0.16.0
+          ports:
+            - name: http
+              containerPort: 9187
+          env:
+            - name: DATA_SOURCE_NAME
+              value: "postgresql://orders:devpassword@postgres.default.svc.cluster.local:5432/orders?sslmode=disable"
+            - name: PG_EXPORTER_EXTEND_QUERY_PATH
+              value: /etc/postgres_exporter/queries.yaml
+          volumeMounts:
+            - name: queries
+              mountPath: /etc/postgres_exporter
+          resources:
+            requests: { memory: "32Mi", cpu: "20m" }
+            limits:   { memory: "128Mi", cpu: "200m" }
+      volumes:
+        - name: queries
+          configMap:
+            name: postgres-exporter-queries

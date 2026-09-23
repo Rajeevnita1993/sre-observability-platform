@@ -230,3 +230,17 @@ spec:
             summary: "freshness burn rate > 6x (ticket)"
             description: "6h stale ratio {{ $value | humanizePercentage }}, confirmed over the last 30m. At this rate the monthly freshness budget exhausts in ~5 days."
             runbook_url: "http://localhost:8081/runbooks/freshness-slo-burn-rate-ticket.md"
+    - name: queue_health
+      rules:
+        - alert: SqsOldestMessageAgeHigh
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le, queue) (rate(sqs_message_age_seconds_bucket[5m]))
+            ) > 60
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Oldest message on {{ $labels.queue }} is stale"
+            description: "p95 consume-time age is {{ $value }}s (>60s) for 5m — worker is behind, not just busy."
+            runbook_url: "http://localhost:8081/runbooks/sqs-oldest-message-age-high.md"

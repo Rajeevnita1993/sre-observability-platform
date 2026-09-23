@@ -21,6 +21,7 @@
     "@opentelemetry/semantic-conventions": "^1.29.0",
     "@pyroscope/nodejs": "^0.6.3",
     "express": "4.19.2",
+    "pg": "^8.23.0",
     "pino": "^10.3.1",
     "prom-client": "^15.1.3"
   }

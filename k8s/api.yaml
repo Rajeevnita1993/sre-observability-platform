@@ -27,7 +27,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: obs-api:day41
+          image: obs-api:1.3.5-pg
           imagePullPolicy: Never       # image only exists via kind load, never pull
           ports: [{ containerPort: 8080 }]
           envFrom: [{ configMapRef: { name: api-config } }]

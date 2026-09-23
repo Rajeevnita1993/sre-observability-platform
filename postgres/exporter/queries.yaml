@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-exporter-queries
+  namespace: default
+data:
+  queries.yaml: |
+    pg_stat_statements:
+      query: "SELECT query, calls, mean_exec_time, total_exec_time FROM pg_stat_statements"
+      metrics:
+        - query:
+            usage: "LABEL"
+            description: "Normalized query text"
+        - mean_exec_time:
+            usage: "GAUGE"
+            description: "Mean execution time (ms)"
+        - calls:
+            usage: "COUNTER"
+            description: "Calls"
+        - total_exec_time:
+            usage: "COUNTER"
+            description: "Total execution time (ms)"
+    pg_locks:
+      query: "SELECT count(*) AS waiting FROM pg_locks WHERE NOT granted"
+      metrics:
+        - waiting:
+            usage: "GAUGE"
+            description: "Number of sessions currently waiting for a lock"

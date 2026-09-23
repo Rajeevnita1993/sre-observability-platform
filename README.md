@@ -429,3 +429,24 @@ Demonstrates implementation of distributed tracing across asynchronous message b
 - Automated incident investigation AI capabilities
 - SLO-driven alerting based on service level objectives
 - Advanced trace analysis and root cause detection capabilities
+
+
+# Postgres in-cluster
+
+## First-boot setup (only after PVC wipe)
+1. kubectl apply -f postgres/
+2. kubectl -n default exec -i deploy/postgres -- psql -U orders -d orders -c \
+     "ALTER SYSTEM SET max_connections = 20;"
+   kubectl -n default exec -i deploy/postgres -- psql -U orders -d orders -c \
+     "ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_statements';"
+   kubectl -n default rollout restart deploy/postgres
+3. kubectl -n default exec -i deploy/postgres -- psql -U orders -d orders -c \
+     "CREATE EXTENSION pg_stat_statements;"
+
+## Why strategy: Recreate
+Old and new Postgres pods must not overlap on the RWO PVC. RollingUpdate
+caused data corruption once — see Day 66 notes.
+
+## Why POSTGRES_MAX_CONNECTIONS env is a no-op
+The postgres:16 image only honors POSTGRES_DB/USER/PASSWORD at init.
+max_connections is set via ALTER SYSTEM above.
