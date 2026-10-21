@@ -23,12 +23,15 @@ const {
   messagesConsumed,
   orderFulfillmentDurationHist,
   sqsMessageAgeSeconds,
+  idempotencyCacheHits,
+  idempotencyCacheMisses,
 } = require('./metrics');
 
 const { serializeResult } = require('./serialize');
 const { writeOrderResult } = require('./s3writer');
 const { cacheResult } = require('./resultsCache');
-const { recordOrder } = require('./db');
+const { recordOrder, insertOrderMetadata } = require('./db');
+const { claimIdempotencyKey } = require('./idempotency');
 
 const cfg = {
   region: process.env.AWS_REGION,
@@ -112,6 +115,28 @@ function validateOrder(order) {
 async function processOneMessage(m) {
   const envelope = JSON.parse(m.Body);
   const order = JSON.parse(envelope.Message);
+
+  const isNew = await claimIdempotencyKey(order.id);
+
+  if (!isNew) {
+    idempotencyCacheHits.add(1);
+    
+    // Ack the message so SQS doesn't redeliver it forever
+    await sqs.send(new DeleteMessageCommand({
+      QueueUrl: process.env.QUEUE_URL,
+      ReceiptHandle: m.ReceiptHandle,
+    }));
+    
+    // Log and exit early
+    logger.info(withTrace({ msg: 'Duplicate delivery skipped', order_id: order.id }));
+    return; 
+  }
+
+  idempotencyCacheMisses.add(1);
+  // ─── NEW: Belt-and-suspenders DB insert ──────────────────────────
+  // If Redis evicts the key before the TTL, this catches the duplicate
+  // at the database level so we don't get a second row.
+  await insertOrderMetadata(order, m.MessageId);
 
   // publish → consume age 
   const publishedAtMs = Number(order.publishedAtMs);

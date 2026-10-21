@@ -56,6 +56,17 @@ const sqsMessageAgeSeconds = meter.createHistogram(
   }
 );
 
+// COUNTERS — idempotency
+const idempotencyCacheHits = meter.createCounter(
+  'idempotency_cache_hit',
+  { description: 'Duplicate deliveries skipped' }
+);
+
+const idempotencyCacheMisses = meter.createCounter(
+  'idempotency_cache_miss',
+  { description: 'First-time deliveries processed' }
+);
+
 module.exports = {
   jobsProcessed,
   queueDepth,
@@ -63,4 +74,6 @@ module.exports = {
   messagesConsumed,
   orderFulfillmentDurationHist,
   sqsMessageAgeSeconds,
+  idempotencyCacheHits,
+  idempotencyCacheMisses,
 };

@@ -28,4 +28,13 @@ async function recordOrder(order) {
 );
 }
 
-module.exports = { pool, recordOrder };
+async function insertOrderMetadata(order, sqsMessageId) {
+  await pool.query(
+    `INSERT INTO order_metadata (order_id, sqs_message_id, item, qty)
+     VALUES ($1, $2, $3, $4) 
+     ON CONFLICT (order_id) DO NOTHING`,
+    [order.id, sqsMessageId, order.item, order.qty]
+  );
+}
+
+module.exports = { pool, recordOrder, insertOrderMetadata };
