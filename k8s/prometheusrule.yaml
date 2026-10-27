@@ -56,7 +56,7 @@ spec:
               sum by (le) (rate(s3_write_duration_bucket{job="worker"}[5m]))) > 2
           for: 5m
           labels:
-            severity: warning
+            severity: info
             queue: orders-queue
           annotations:
             summary: "p95 write latency high on {{ $labels.queue }}"

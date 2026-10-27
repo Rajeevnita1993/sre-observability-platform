@@ -12,14 +12,14 @@ spec:
     repeatInterval: 4h
     routes:
       - matchers: [{ name: severity, value: critical }]
-        receiver: pager
+        receiver: grafana-oncall
       - matchers: [{ name: severity, value: warning }]
         receiver: slack-stub
   receivers:
     - name: default-webhook
       webhookConfigs: [{ url: 'http://localhost:5001/default' }]
-    - name: pager
-      webhookConfigs: [{ url: 'http://localhost:5001/pager' }]
+    - name: grafana-oncall
+      webhookConfigs: [{ url: 'http://oncall-engine:8080/integrations/v1/alertmanager/JC7975r7a0Vpr1BcQO5GrxHPe/' }]
     - name: slack-stub
       webhookConfigs: [{ url: 'http://localhost:5001/slack' }]
   inhibitRules:
@@ -28,5 +28,5 @@ spec:
         - { name: severity,  value: critical }
       targetMatch:                # SINGULAR
         - { name: alertname, value: HighLatency }
-        - { name: severity,  value: warning }
+        #- { name: severity,  value: warning }
       equal: ['queue']
