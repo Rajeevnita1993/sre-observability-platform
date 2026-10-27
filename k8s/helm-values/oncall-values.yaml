@@ -1,0 +1,44 @@
+# oncall-values.yaml — Day 71 lab (corrected for Bitnami image deprecation)
+base_url: localhost:8083
+base_url_protocol: http
+
+# Reuse the kps Grafana from Day 42
+grafana:
+  enabled: false
+
+# Provide the URL of the existing Grafana instance
+externalGrafana:
+  url: http://kps-grafana.monitoring.svc.cluster.local:80
+
+# Disable the bundled cert-manager (incompatible with K8s 1.25+)
+cert-manager:
+  enabled: false
+
+# Disable the bundled nginx ingress
+ingress:
+  enabled: false
+ingress-nginx:
+  enabled: false
+
+# ─── NEW: Bitnami legacy image overrides ───
+global:
+  security:
+    allowInsecureImages: true
+
+redis:
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/redis
+    tag: latest
+
+mariadb:
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/mariadb
+    tag: latest
+
+rabbitmq:
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/rabbitmq
+    tag: latest
